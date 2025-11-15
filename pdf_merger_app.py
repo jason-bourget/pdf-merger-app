@@ -3,7 +3,7 @@ import os
 from typing import List
 
 import streamlit as st
-from pypdf import PdfMerger
+from pypdf import PdfWriter
 import io
 import os
 
@@ -11,34 +11,31 @@ import os
 def merge_pdfs_with_bookmarks(files):
     """
     Merge uploaded PDF files into a single PDF, adding a top-level
-    bookmark for each original file, using the filename (without extension)
-    as the bookmark title.
+    bookmark (outline item) for each original file, using the filename
+    (without extension) as the title.
 
-    Uses PdfMerger to preserve fonts/layout as-is.
+    Uses pypdf.PdfWriter.append(), which is the modern, supported API.
     """
-    merger = PdfMerger()
+    writer = PdfWriter()
 
     # Sort by filename so order is predictable
     files_sorted = sorted(files, key=lambda f: f.name.lower())
 
     for uploaded_file in files_sorted:
-        # Read the uploaded file into memory (Streamlit gives a file-like object)
+        # Streamlit gives us a file-like object; rewind just in case
         uploaded_file.seek(0)
-        pdf_bytes = uploaded_file.read()
-        pdf_stream = io.BytesIO(pdf_bytes)
 
         base_name = os.path.splitext(uploaded_file.name)[0]
 
-        # Append with a bookmark. This keeps the original pages untouched.
-        merger.append(pdf_stream, bookmark=base_name)
+        # Append the entire PDF and create a bookmark at its first page
+        # outline_item is the bookmark title
+        writer.append(uploaded_file, outline_item=base_name)
 
     # Write merged PDF to a BytesIO buffer
     output_stream = io.BytesIO()
-    merger.write(output_stream)
-    merger.close()
+    writer.write(output_stream)
     output_stream.seek(0)
     return output_stream
-
 def main():
     st.set_page_config(page_title="PDF Combiner with Bookmarks", layout="centered")
 

@@ -3,51 +3,41 @@ import os
 from typing import List
 
 import streamlit as st
-from PyPDF2 import PdfReader, PdfWriter
+from pypdf import PdfMerger
+import io
+import os
 
 
-def merge_pdfs_with_bookmarks(files: List) -> io.BytesIO:
+def merge_pdfs_with_bookmarks(files):
     """
     Merge uploaded PDF files into a single PDF, adding a top-level
     bookmark for each original file, using the filename (without extension)
     as the bookmark title.
+
+    Uses PdfMerger to preserve fonts/layout as-is.
     """
-    writer = PdfWriter()
-    current_page = 0
+    merger = PdfMerger()
 
     # Sort by filename so order is predictable
     files_sorted = sorted(files, key=lambda f: f.name.lower())
 
     for uploaded_file in files_sorted:
-        reader = PdfReader(uploaded_file)
-        num_pages = len(reader.pages)
+        # Read the uploaded file into memory (Streamlit gives a file-like object)
+        uploaded_file.seek(0)
+        pdf_bytes = uploaded_file.read()
+        pdf_stream = io.BytesIO(pdf_bytes)
 
-        # Add pages
-        for page in reader.pages:
-            writer.add_page(page)
-
-        # Use the file name (no extension) as the bookmark title
         base_name = os.path.splitext(uploaded_file.name)[0]
 
-        # Add bookmark at the first page of this document
-        try:
-            # Newer PyPDF2
-            writer.add_outline_item(
-                title=base_name,
-                page_number=current_page
-            )
-        except AttributeError:
-            # Older PyPDF2 fallback
-            writer.addBookmark(base_name, current_page)
+        # Append with a bookmark. This keeps the original pages untouched.
+        merger.append(pdf_stream, bookmark=base_name)
 
-        current_page += num_pages
-
-    # Write to in-memory buffer
+    # Write merged PDF to a BytesIO buffer
     output_stream = io.BytesIO()
-    writer.write(output_stream)
+    merger.write(output_stream)
+    merger.close()
     output_stream.seek(0)
     return output_stream
-
 
 def main():
     st.set_page_config(page_title="PDF Combiner with Bookmarks", layout="centered")
